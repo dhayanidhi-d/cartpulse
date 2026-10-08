@@ -1,0 +1,56 @@
+version: "3.9"
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: cartpulse
+      POSTGRES_USER: cartpulse
+      POSTGRES_PASSWORD: cartpulse
+    volumes:
+      - cartpulse_pgdata:/var/lib/postgresql/data
+    ports: ["5432:5432"]
+
+  web:
+    build: .
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py seed_demo_data &&
+             daphne -b 0.0.0.0 -p 8000 cartpulse.asgi:application"
+    volumes: [".:/app"]
+    ports: ["8000:8000"]
+    environment:
+      - USE_POSTGRES=True
+      - POSTGRES_HOST=db
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+    depends_on: [db, redis]
+
+  worker:
+    build: .
+    command: celery -A cartpulse worker --loglevel=info
+    volumes: [".:/app"]
+    environment:
+      - USE_POSTGRES=True
+      - POSTGRES_HOST=db
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+    depends_on: [db, redis, web]
+
+  beat:
+    build: .
+    command: celery -A cartpulse beat --loglevel=info
+    volumes: [".:/app"]
+    environment:
+      - USE_POSTGRES=True
+      - POSTGRES_HOST=db
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+    depends_on: [db, redis, web]
+
+volumes:
+  cartpulse_pgdata:

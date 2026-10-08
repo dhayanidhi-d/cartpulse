@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>CartPulse — Live Inventory & Pricing Feed</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 700px; margin: 40px auto; background:#0f1115; color:#eee; }
+    h1 { font-size: 1.3rem; }
+    #log { background:#1a1d24; border-radius:8px; padding:12px; height:400px; overflow-y:auto; font-family: monospace; font-size: 0.85rem; }
+    .inv { color:#4fc3f7; }
+    .price { color:#81c784; }
+    .ack { color:#999; }
+  </style>
+</head>
+<body>
+  <h1>CartPulse — Live Inventory &amp; Pricing Feed</h1>
+  <p>Connects to <code>ws://localhost:8000/ws/inventory/</code>. Trigger a checkout or a stock
+     adjustment via the REST API in another tab/terminal and watch events land here instantly.</p>
+  <div id="log"></div>
+
+  <script>
+    const log = document.getElementById("log");
+    function append(cls, text) {
+      const line = document.createElement("div");
+      line.className = cls;
+      line.textContent = `[${new Date().toLocaleTimeString()}] ${text}`;
+      log.appendChild(line);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    const socket = new WebSocket("ws://localhost:8000/ws/inventory/");
+    socket.onopen = () => append("ack", "connected");
+    socket.onclose = () => append("ack", "disconnected");
+    socket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.event === "inventory.update") {
+        append("inv", `INVENTORY listing #${data.listing_id}: ${data.available_quantity} available`);
+      } else if (data.event === "pricing.update") {
+        append("price", `PRICE listing #${data.listing_id}: ₹${data.old_price} -> ₹${data.new_price} (${data.reason})`);
+      } else {
+        append("ack", JSON.stringify(data));
+      }
+    };
+  </script>
+</body>
+</html>
